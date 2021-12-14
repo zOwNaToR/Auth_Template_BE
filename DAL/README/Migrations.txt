@@ -1,0 +1,18 @@
+﻿//NOTA BENE: PRIMA MIGRAZONE
+Per effettuare la prima migrazione nello Startput aggiungere alla chiamata "options.UseSqlServer" 
+il parametro MigrationsAssembly(NomeAssemblyDoveRisiedeIlDbContext). 
+Es.
+	services.AddDbContext<AppDbContext>(
+		options => options.UseSqlServer(Configuration.GetConnectionString("ConnStr"), 
+		b => b.MigrationsAssembly("DAL")));
+
+//Comandi prima migrazione (Creerà e salverà sul DB le tabelle Identity)
+Add-Migration CreateIdentitySchema
+Update-Database
+
+
+//Riga di Mirazione Pronta:
+add-migration Init -Project DAL
+
+//Configurazione Riga di Migrazione 
+Add-Migration <MigrationName> -Project <ProjectName> -OutputDir <DirectoryName>
