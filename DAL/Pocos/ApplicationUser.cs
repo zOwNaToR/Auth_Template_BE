@@ -2,5 +2,5 @@
 
 public class ApplicationUser : IdentityUser<Guid>
 {
-    public ICollection<RefreshToken>? RefreshTokens { get; set; }
+    public ICollection<RefreshToken> RefreshTokens { get; set; }
 }

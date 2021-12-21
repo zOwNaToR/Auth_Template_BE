@@ -4,22 +4,24 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
+const string MyCorsPolicy = ".NET6Auth_CorsPolicy";
+
 void ConfigureServices(IServiceCollection services, IConfiguration configuration)
 {
     services.AddControllers();
-    //services.AddCors(options =>
-    //{
-    //    options.AddPolicy(name: MyCorsPolicy,
-    //                      builder =>
-    //                      {
-    //                          builder
-    //                            //.AllowAnyOrigin()
-    //                            .WithOrigins("http://localhost:3000")
-    //                            .AllowAnyHeader()
-    //                            .AllowAnyMethod()
-    //                            .AllowCredentials();
-    //                      });
-    //});
+    services.AddCors(options =>
+    {
+        options.AddPolicy(name: MyCorsPolicy,
+            builder =>
+            {
+                builder
+                //.AllowAnyOrigin()
+                .WithOrigins("http://localhost:3000")
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+            });
+    });
 
     services.Configure<CookiePolicyOptions>(options =>
     {
@@ -120,6 +122,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors(MyCorsPolicy);
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

@@ -67,23 +67,21 @@ public class IdentityService : IIdentityService
 
         if (user == null)
         {
-            errorResponse.Errors.Add("User does not exist");
+            errorResponse.Errors.Add("Wrong credentials");
             return errorResponse;
         }
 
         var userHasValidPassword = await _userManager.CheckPasswordAsync(user, password);
-
         if (!userHasValidPassword)
         {
-            errorResponse.Errors.Add("User/password combination is wrong");
+            errorResponse.Errors.Add("credentials");
             return errorResponse;
         }
 
         var result = await _signInManager.PasswordSignInAsync(user, password, true, false);
-
         if (!result.Succeeded)
         {
-            errorResponse.Errors.Add("User/password combination is wrong");
+            errorResponse.Errors.Add("credentials");
             return errorResponse;
         }
 
@@ -101,7 +99,6 @@ public class IdentityService : IIdentityService
         }
 
         var expiryDateUnix = long.Parse(validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Exp).Value);
-
         var expiryDateTimeUtc = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(expiryDateUnix);
 
         if (expiryDateTimeUtc > DateTime.UtcNow)
@@ -110,65 +107,61 @@ public class IdentityService : IIdentityService
             return errorResponse;
         }
 
-        var jti = validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
-
-        var storedRefreshToken = await _context.RefreshTokens.SingleOrDefaultAsync(x => x.Token == refreshToken);
-
-        //Check token validity
-        if (storedRefreshToken == null)
+        // Check token validity
+        var dbRefreshToken = await _context.RefreshTokens.SingleOrDefaultAsync(x => x.Token == refreshToken);
+        if (dbRefreshToken == null)
         {
             errorResponse.Errors.Add("This refresh token does not exist");
             return errorResponse;
         }
-        if (DateTime.UtcNow > storedRefreshToken.ExpiryDate)
+        if (dbRefreshToken.Invalidated)
+        {
+            await InvalidateAllUserRefreshTokens(dbRefreshToken.UserId);
+            errorResponse.Errors.Add("This refresh token has been invalidated");
+            return errorResponse;
+        }
+        if (DateTime.UtcNow > dbRefreshToken.ExpiryDate)
         {
             errorResponse.Errors.Add("This refresh token has expired");
             return errorResponse;
         }
-        if (storedRefreshToken.Invalidated)
-        {
-            errorResponse.Errors.Add("This refresh token has been invalidated");
-            return errorResponse;
-        }
-        if (storedRefreshToken.Used)
+        if (dbRefreshToken.Used)
         {
             errorResponse.Errors.Add("This refresh token has been used");
             return errorResponse;
         }
-        if (storedRefreshToken.JwtId != jti)
+
+        var jti = validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
+        if (dbRefreshToken.JwtId != jti)
         {
             errorResponse.Errors.Add("This refresh token does not match this JWT");
             return errorResponse;
         }
 
-        storedRefreshToken.Used = true;
-        _context.RefreshTokens.Update(storedRefreshToken);
+        dbRefreshToken.Used = true;
+        _context.RefreshTokens.Update(dbRefreshToken);
         await _context.SaveChangesAsync();
 
         var user = await _userManager.FindByIdAsync(validatedToken.Claims.Single(x => x.Type == "Id").Value);
         return await GenerateAuthenticationResultForUserAsync(user);
     }
-    public async Task<AuthResponse> RevokeRefreshToken(string token)
+    public async Task<AuthResponse> RevokeRefreshToken(string refreshToken)
     {
         var errorResponse = new AuthResponse(false);
 
-        var user = await _context.Users.Include(x => x.RefreshTokens).SingleOrDefaultAsync(u => u.RefreshTokens.Any(t => t.Token == token));
-        if (user == null)
+        var dbRefreshToken = await _context.RefreshTokens.SingleOrDefaultAsync(x => x.Token == refreshToken);
+        if (dbRefreshToken == null)
         {
-            errorResponse.Errors.Add("User not found with this refresh token");
+            errorResponse.Errors.Add("Token not found");
             return errorResponse;
         }
-
-        var refreshToken = user.RefreshTokens.Single(x => x.Token == token);
-        if (refreshToken.Invalidated)
+        if (dbRefreshToken.Invalidated)
         {
             errorResponse.Errors.Add("Token is not active");
             return errorResponse;
         }
 
-        // invalidate token and save
-        refreshToken.Invalidated = true;
-
+        dbRefreshToken.Invalidated = true;
         await _context.SaveChangesAsync();
 
         return new AuthResponse
@@ -273,6 +266,12 @@ public class IdentityService : IIdentityService
     }
     #endregion
 
+    private async Task InvalidateAllUserRefreshTokens(Guid userId)
+    {
+        var dbRefreshTokens = await _context.RefreshTokens.Where(x => x.UserId == userId).ToListAsync();
+        dbRefreshTokens.ForEach(x => x.Invalidated = true);
+        await _context.SaveChangesAsync();
+    }
     private async Task<AuthResponse> GenerateAuthenticationResultForUserAsync(ApplicationUser user)
     {
         var tokenHandler = new JwtSecurityTokenHandler();

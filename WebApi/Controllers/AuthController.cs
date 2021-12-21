@@ -5,11 +5,11 @@ namespace WebApi.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthenticateController : ControllerBase
+public class AuthController : ControllerBase
 {
     private readonly IIdentityService _identityService;
 
-    public AuthenticateController(IIdentityService identityService)
+    public AuthController(IIdentityService identityService)
     {
         _identityService = identityService;
     }
@@ -42,11 +42,6 @@ public class AuthenticateController : ControllerBase
                 return BadRequest(authResponse);
             }
 
-            // Imposta un Cookie HTTP Only con il refresh token, in modo che non sia memorizzato solo lato server
-            // e mai visibile al client
-            SetRefreshTokenCookie(authResponse.RefreshToken);
-
-            authResponse.RefreshToken = null;
             return Ok(authResponse);
         }
         catch (Exception e)
@@ -68,7 +63,6 @@ public class AuthenticateController : ControllerBase
                 return BadRequest(authResponse);
             }
 
-            Thread.Sleep(1000);
             if (!cancellationToken.IsCancellationRequested)
             {
                 authResponse = await _identityService.LoginAsync(request.Email, request.Password);
@@ -76,13 +70,8 @@ public class AuthenticateController : ControllerBase
                 {
                     return BadRequest(authResponse);
                 }
-
-                // Imposta un Cookie HTTP Only con il refresh token, in modo che non sia memorizzato solo lato server
-                // e mai visibile al client
-                SetRefreshTokenCookie(authResponse.RefreshToken);
             }
 
-            authResponse.RefreshToken = null;
             return Ok(authResponse);
         }
         catch (Exception e)
@@ -93,23 +82,18 @@ public class AuthenticateController : ControllerBase
 
     [HttpPost]
     [Route("refresh-token")]
-    public async Task<IActionResult> Refresh([FromBody] string token)
+    public async Task<IActionResult> Refresh([FromBody] (string token, string refreshToken) tokens)
     {
         try
         {
-            var refreshToken = GetRefreshTokenCookie();
-            var authResponse = await _identityService.RefreshTokenAsync(token, refreshToken);
+            //var refreshToken = GetRefreshTokenCookie();
+            var authResponse = await _identityService.RefreshTokenAsync(tokens.token, tokens.refreshToken);
 
             if (!authResponse.Success)
             {
                 return BadRequest(authResponse);
             }
 
-            // Imposta un Cookie HTTP Only con il refresh token, in modo che non sia memorizzato solo lato server
-            // e mai visibile al client
-            SetRefreshTokenCookie(authResponse.RefreshToken);
-
-            authResponse.RefreshToken = null;
             return Ok(authResponse);
         }
         catch (Exception e)
@@ -120,12 +104,12 @@ public class AuthenticateController : ControllerBase
 
     [HttpPost]
     [Route("revoke-token")]
-    public async Task<IActionResult> RevokeToken()
+    public async Task<IActionResult> RevokeToken([FromBody] string refreshToken)
     {
         try
         {
+            //var refreshToken = GetRefreshTokenCookie();
             var authResponse = new AuthResponse();
-            var refreshToken = GetRefreshTokenCookie();
 
             if (string.IsNullOrEmpty(refreshToken))
             {
@@ -148,30 +132,16 @@ public class AuthenticateController : ControllerBase
         }
     }
 
-
-    private void SetRefreshTokenCookie(string token)
+    private string? GetRefreshTokenCookie()
     {
-        Cookie refreshTokenCookie = new("refreshToken", new CookieOptions
+        if (Request.Headers.TryGetValue("rToken", out var values))
         {
-            HttpOnly = true,
-            Expires = DateTime.UtcNow.AddDays(7),
-            IsEssential = true,
-            Secure = false,
-            SameSite = SameSiteMode.Lax,
-            Path = "/",
-            Domain = "localhost"
-        });
-        refreshTokenCookie.SetCookieValue(token, Response);
+            return values.ToString();
+        }
+
+        return null;
     }
-    private string GetRefreshTokenCookie()
-    {
-        Cookie refreshTokenCookie = new("refreshToken");
-        return refreshTokenCookie.GetCookieValue(Request);
-    }
-    private void DeleteRefreshTokenCookie()
-    {
-        Response.Cookies.Delete("refreshToken");
-    }
+
     private string GetIpAddress()
     {
         if (Request.Headers.ContainsKey("X-Forwarded-For"))
