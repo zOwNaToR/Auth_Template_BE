@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using System.Net;
 
 namespace WebApi.Controllers;
 
@@ -32,7 +33,7 @@ public class AuthController : ControllerBase
             var authResponse = new AuthResponse();
             if (!ModelState.IsValid)
             {
-                authResponse.Errors.AddRange(ModelState.Values.SelectMany(x => x.Errors.Select(xx => xx.ErrorMessage)));
+                authResponse.Errors.AddRange(ModelState.GetErrors());
                 return BadRequest(authResponse);
             }
 
@@ -46,7 +47,7 @@ public class AuthController : ControllerBase
         }
         catch (Exception e)
         {
-            return BadRequest(e);
+            return Problem(detail: e.Message, statusCode: (int)HttpStatusCode.InternalServerError);
         }
     }
 
@@ -59,7 +60,7 @@ public class AuthController : ControllerBase
             var authResponse = new AuthResponse();
             if (!ModelState.IsValid)
             {
-                authResponse.Errors.AddRange(ModelState.Values.SelectMany(x => x.Errors.Select(xx => xx.ErrorMessage)));
+                authResponse.Errors.AddRange(ModelState.GetErrors());
                 return BadRequest(authResponse);
             }
 
@@ -68,7 +69,7 @@ public class AuthController : ControllerBase
                 authResponse = await _identityService.LoginAsync(request.Email, request.Password);
                 if (!authResponse.Success)
                 {
-                    return BadRequest(authResponse);
+                    return Unauthorized(authResponse);
                 }
             }
 
@@ -76,18 +77,18 @@ public class AuthController : ControllerBase
         }
         catch (Exception e)
         {
-            return BadRequest(e);
+            return Problem(detail: e.Message, statusCode: (int)HttpStatusCode.InternalServerError);
         }
     }
 
     [HttpPost]
     [Route("refresh-token")]
-    public async Task<IActionResult> Refresh([FromBody] (string token, string refreshToken) tokens)
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
     {
         try
         {
             //var refreshToken = GetRefreshTokenCookie();
-            var authResponse = await _identityService.RefreshTokenAsync(tokens.token, tokens.refreshToken);
+            var authResponse = await _identityService.RefreshTokenAsync(request.Token, request.RefreshToken);
 
             if (!authResponse.Success)
             {
@@ -98,7 +99,7 @@ public class AuthController : ControllerBase
         }
         catch (Exception e)
         {
-            return BadRequest(e);
+            return Problem(detail: e.Message, statusCode: (int)HttpStatusCode.InternalServerError);
         }
     }
 
@@ -123,12 +124,11 @@ public class AuthController : ControllerBase
                 return BadRequest(authResponse);
             }
 
-            authResponse.RefreshToken = null;
             return Ok(authResponse);
         }
         catch (Exception e)
         {
-            return BadRequest(e);
+            return Problem(detail: e.Message, statusCode: (int)HttpStatusCode.InternalServerError);
         }
     }
 
@@ -141,7 +141,6 @@ public class AuthController : ControllerBase
 
         return null;
     }
-
     private string GetIpAddress()
     {
         if (Request.Headers.ContainsKey("X-Forwarded-For"))

@@ -181,8 +181,8 @@ public class IdentityService : IIdentityService
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
-            Expires = UtcNow.AddMinutes(_appSettings.JWT.TokenExpiresIn),
-            //Expires = UtcNow.AddSeconds(45),
+            //Expires = UtcNow.AddMinutes(_appSettings.JWT.TokenExpiresIn),
+            Expires = UtcNow.AddSeconds(15),
             SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256),
             Audience = _appSettings.JWT.ValidAudience,
             Issuer = _appSettings.JWT.ValidIssuer
