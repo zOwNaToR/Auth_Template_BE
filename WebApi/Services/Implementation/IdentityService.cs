@@ -90,21 +90,33 @@ public class IdentityService : IIdentityService
     public async Task<AuthResponse> RefreshTokenAsync(string token, string refreshToken)
     {
         var errorResponse = new AuthResponse(false);
-        var validatedToken = GetPrincipalFromToken(token);
 
-        if (validatedToken == null)
+        // Validate old token expiry date if present
+        if (!string.IsNullOrEmpty(token))
         {
-            errorResponse.Errors.Add("Invalid Token");
-            return errorResponse;
-        }
+            var validatedToken = GetPrincipalFromToken(token);
 
-        var expiryDateUnix = long.Parse(validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Exp).Value);
-        var expiryDateTimeUtc = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(expiryDateUnix);
+            if (validatedToken == null)
+            {
+                errorResponse.Errors.Add("Invalid Token");
+                return errorResponse;
+            }
 
-        if (expiryDateTimeUtc > DateTime.UtcNow)
-        {
-            errorResponse.Errors.Add("This token hasn't expired yet");
-            return errorResponse;
+            var expiryDateUnix = long.Parse(validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Exp).Value);
+            var expiryDateTimeUtc = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(expiryDateUnix);
+
+            if (expiryDateTimeUtc > DateTime.UtcNow)
+            {
+                errorResponse.Errors.Add("This token hasn't expired yet");
+                return errorResponse;
+            }
+
+            //var jti = validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
+            //if (dbRefreshToken.JwtId != jti)
+            //{
+            //    errorResponse.Errors.Add("This refresh token does not match this JWT");
+            //    return errorResponse;
+            //}
         }
 
         // Check token validity
@@ -131,18 +143,11 @@ public class IdentityService : IIdentityService
             return errorResponse;
         }
 
-        var jti = validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
-        if (dbRefreshToken.JwtId != jti)
-        {
-            errorResponse.Errors.Add("This refresh token does not match this JWT");
-            return errorResponse;
-        }
-
         dbRefreshToken.Used = true;
         _context.RefreshTokens.Update(dbRefreshToken);
         await _context.SaveChangesAsync();
 
-        var user = await _userManager.FindByIdAsync(validatedToken.Claims.Single(x => x.Type == "Id").Value);
+        var user = await _userManager.FindByIdAsync(dbRefreshToken.UserId.ToString());
         return await GenerateAuthenticationResultForUserAsync(user);
     }
     public async Task<AuthResponse> RevokeRefreshToken(string refreshToken)
@@ -182,7 +187,7 @@ public class IdentityService : IIdentityService
         {
             Subject = new ClaimsIdentity(claims),
             //Expires = UtcNow.AddMinutes(_appSettings.JWT.TokenExpiresIn),
-            Expires = UtcNow.AddSeconds(15),
+            Expires = UtcNow.AddSeconds(45),
             SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256),
             Audience = _appSettings.JWT.ValidAudience,
             Issuer = _appSettings.JWT.ValidIssuer

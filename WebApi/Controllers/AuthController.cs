@@ -43,6 +43,7 @@ public class AuthController : ControllerBase
                 return BadRequest(authResponse);
             }
 
+            authResponse.HideRefreshToken();
             return Ok(authResponse);
         }
         catch (Exception e)
@@ -73,6 +74,8 @@ public class AuthController : ControllerBase
                 }
             }
 
+            SetRefreshTokenCookie(authResponse.RefreshToken);
+            authResponse.HideRefreshToken();
             return Ok(authResponse);
         }
         catch (Exception e)
@@ -83,18 +86,28 @@ public class AuthController : ControllerBase
 
     [HttpPost]
     [Route("refresh-token")]
+    // RefreshTokenRequest request
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
     {
         try
         {
-            //var refreshToken = GetRefreshTokenCookie();
-            var authResponse = await _identityService.RefreshTokenAsync(request.Token, request.RefreshToken);
+            var authResponse = new AuthResponse();
+            
+            var refreshToken = GetRefreshTokenCookie();
+            if (string.IsNullOrEmpty(refreshToken))
+            {
+                authResponse.Errors.Add("Refresh token not found");
+                return BadRequest(authResponse);
+            }
 
+            authResponse = await _identityService.RefreshTokenAsync(request.Token, refreshToken);
             if (!authResponse.Success)
             {
                 return BadRequest(authResponse);
             }
 
+            SetRefreshTokenCookie(authResponse.RefreshToken);
+            authResponse.HideRefreshToken();
             return Ok(authResponse);
         }
         catch (Exception e)
@@ -105,16 +118,17 @@ public class AuthController : ControllerBase
 
     [HttpPost]
     [Route("revoke-token")]
-    public async Task<IActionResult> RevokeToken([FromBody] string refreshToken)
+    public async Task<IActionResult> RevokeToken()
     {
         try
         {
             //var refreshToken = GetRefreshTokenCookie();
             var authResponse = new AuthResponse();
 
+            var refreshToken = GetRefreshTokenCookie();
             if (string.IsNullOrEmpty(refreshToken))
             {
-                authResponse.Errors.Add("RefreshToken is required");
+                authResponse.Errors.Add("RefreshToken not found");
                 return BadRequest(authResponse);
             }
 
@@ -134,10 +148,27 @@ public class AuthController : ControllerBase
 
     private string? GetRefreshTokenCookie()
     {
-        if (Request.Headers.TryGetValue("rToken", out var values))
+        if (Request.Cookies.TryGetValue("rToken", out string? value))
         {
-            return values.ToString();
+            return value?.ToString();
         }
+
+        return null;
+    }
+    private string? SetRefreshTokenCookie(string refreshToken)
+    {
+        var rtCoookie = new Dto.Cookie("rToken", new CookieOptions
+        {
+            HttpOnly = true,
+            Expires = DateTime.UtcNow.AddDays(7),
+            IsEssential = true,
+            Secure = true,
+            SameSite = SameSiteMode.None,
+            //Path = "/",
+            //Domain = "localhost"
+        });
+
+        rtCoookie.SetCookieValue(refreshToken, Response);
 
         return null;
     }
