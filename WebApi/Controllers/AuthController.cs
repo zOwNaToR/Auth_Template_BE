@@ -25,26 +25,25 @@ public class AuthController : ControllerBase
 
 
     [HttpPost]
-    [Route("register")]
+    [Route("signup")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         try
         {
-            var authResponse = new AuthResponse();
+            var response = new BaseResponse();
             if (!ModelState.IsValid)
             {
-                authResponse.Errors.AddRange(ModelState.GetErrors());
-                return BadRequest(authResponse);
+                response.Errors.AddRange(ModelState.GetErrors());
+                return BadRequest(response);
             }
 
-            authResponse = await _identityService.RegisterAsync(request.Username, request.Email, request.Password);
-            if (!authResponse.Success)
+            response = await _identityService.RegisterAsync(request.Username, request.Email, request.Password);
+            if (!response.Success)
             {
-                return BadRequest(authResponse);
+                return BadRequest(response);
             }
 
-            authResponse.HideRefreshToken();
-            return Ok(authResponse);
+            return Ok(response);
         }
         catch (Exception e)
         {

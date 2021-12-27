@@ -32,9 +32,9 @@ public class IdentityService : IIdentityService
 
 
     #region Public interface methods
-    public async Task<AuthResponse> RegisterAsync(string username, string email, string password)
+    public async Task<BaseResponse> RegisterAsync(string username, string email, string password)
     {
-        var errorResponse = new AuthResponse(false);
+        var errorResponse = new BaseResponse(false);
         var existingUser = await _userManager.FindByEmailAsync(email);
 
         if (existingUser != null)
