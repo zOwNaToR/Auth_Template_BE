@@ -158,7 +158,7 @@ public class AuthController : ControllerBase
             }
 
             resp = await _identityService.SendPasswordResetLink(request.Email);
-            return Ok(resp);
+            return Ok();
         }
         catch (Exception e)
         {

@@ -1,3 +1,4 @@
+using Common;
 using EmailSender;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;

@@ -1,4 +1,5 @@
-﻿using EmailSender;
+﻿using Common;
+using EmailSender;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -14,7 +15,7 @@ public class IdentityService : IIdentityService
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
     private readonly IEmailSender _emailSender;
-    private readonly IUrlHelper _url;
+    private readonly LinkGenerator _generator;
     private readonly HttpContext _httpContext;
     private readonly TokenValidationParameters _tokenValidationParameters;
     private readonly AppDbContext _context;
@@ -25,7 +26,7 @@ public class IdentityService : IIdentityService
         TokenValidationParameters tokenValidationParameters,
         RoleManager<IdentityRole<Guid>> roleManager,
         IEmailSender emailSender,
-        IUrlHelper url,
+        LinkGenerator generator,
         IHttpContextAccessor httpContextAccessor,
         IOptions<AppSettings> appSettings,
         AppDbContext context)
@@ -35,7 +36,7 @@ public class IdentityService : IIdentityService
         _tokenValidationParameters = tokenValidationParameters;
         _roleManager = roleManager;
         _emailSender = emailSender;
-        _url = url;
+        _generator = generator;
         _httpContext = httpContextAccessor.HttpContext;
         _appSettings = appSettings.Value;
         _context = context;
@@ -203,13 +204,14 @@ public class IdentityService : IIdentityService
         }
 
         response.ResetPasswordToken = await _userManager.GeneratePasswordResetTokenAsync(user);
-        response.ResetLink = _url.Action("ResetPassword", 
-            "Auth", 
-            new { token = response.ResetPasswordToken }, 
-            protocol: _httpContext.Request.Scheme);
+        response.ResetLink = _generator.GetUriByAction(_httpContext,
+            "ResetPassword",
+            "Auth",
+            new { token = response.ResetPasswordToken });
 
-        _emailSender.Send("omar.piga.dev@gmail.com", user.Email, "Reset Email .NET Auth", $"<a href=\"{response.ResetLink}\">Click here</a>");
+        _emailSender.Send(null, user.Email, "Reset Email .NET Auth", $"<a href=\"{response.ResetLink}\">Click here</a>");
 
+        response.Success = true;
         return response;
     }
     public async Task<BaseResponse> ResetPassword(string email, string password, string resetPasswordToken)
