@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using EmailSender;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -11,6 +13,9 @@ public class IdentityService : IIdentityService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
+    private readonly IEmailSender _emailSender;
+    private readonly IUrlHelper _url;
+    private readonly HttpContext _httpContext;
     private readonly TokenValidationParameters _tokenValidationParameters;
     private readonly AppDbContext _context;
     private readonly AppSettings _appSettings;
@@ -19,28 +24,34 @@ public class IdentityService : IIdentityService
         SignInManager<ApplicationUser> signInManager,
         TokenValidationParameters tokenValidationParameters,
         RoleManager<IdentityRole<Guid>> roleManager,
+        IEmailSender emailSender,
+        IUrlHelper url,
+        IHttpContextAccessor httpContextAccessor,
         IOptions<AppSettings> appSettings,
         AppDbContext context)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _tokenValidationParameters = tokenValidationParameters;
-        _context = context;
         _roleManager = roleManager;
+        _emailSender = emailSender;
+        _url = url;
+        _httpContext = httpContextAccessor.HttpContext;
         _appSettings = appSettings.Value;
+        _context = context;
     }
 
 
     #region Public interface methods
     public async Task<BaseResponse> RegisterAsync(string username, string email, string password)
     {
-        var errorResponse = new BaseResponse(false);
+        var response = new BaseResponse(false);
         var existingUser = await _userManager.FindByEmailAsync(email);
 
         if (existingUser != null)
         {
-            errorResponse.Errors.Add("User with this email address already exists");
-            return errorResponse;
+            response.Errors.Add("User with this email address already exists");
+            return response;
         }
 
         var newUser = new ApplicationUser
@@ -51,14 +62,15 @@ public class IdentityService : IIdentityService
         };
 
         var createdUser = await _userManager.CreateAsync(newUser, password);
-
         if (!createdUser.Succeeded)
         {
-            errorResponse.Errors.AddRange(createdUser.Errors.Select(x => x.Description));
-            return errorResponse;
+            response.Errors.AddRange(createdUser.Errors.Select(x => x.Description));
+            return response;
         }
 
-        return await GenerateAuthenticationResultForUserAsync(newUser);
+        response.Success = true;
+        return response;
+        //return await GenerateAuthenticationResultForUserAsync(newUser);
     }
     public async Task<AuthResponse> LoginAsync(string email, string password)
     {
@@ -173,6 +185,48 @@ public class IdentityService : IIdentityService
         {
             Success = true
         };
+    }
+    public async Task<ResetLinkResponse> SendPasswordResetLink(string email)
+    {
+        var response = new ResetLinkResponse(false);
+
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            response.Errors.Add("User with this email address does not exits");
+            return response;
+        }
+        if (!await _userManager.IsEmailConfirmedAsync(user))
+        {
+            response.Errors.Add("Email not confirmed yet");
+            return response;
+        }
+
+        response.ResetPasswordToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+        response.ResetLink = _url.Action("ResetPassword", 
+            "Auth", 
+            new { token = response.ResetPasswordToken }, 
+            protocol: _httpContext.Request.Scheme);
+
+        _emailSender.Send("omar.piga.dev@gmail.com", user.Email, "Reset Email .NET Auth", $"<a href=\"{response.ResetLink}\">Click here</a>");
+
+        return response;
+    }
+    public async Task<BaseResponse> ResetPassword(string email, string password, string resetPasswordToken)
+    {
+        var response = new BaseResponse(false);
+
+        var user = await _userManager.FindByEmailAsync(email);
+        IdentityResult result = await _userManager.ResetPasswordAsync(user, resetPasswordToken, password);
+
+        if (!result.Succeeded)
+        {
+            response.Errors.Add("Error while resetting password");
+            return response;
+        }
+
+        response.Success = true;
+        return response;
     }
     #endregion
 

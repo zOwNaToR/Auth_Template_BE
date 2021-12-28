@@ -1,3 +1,4 @@
+using EmailSender;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -42,6 +43,7 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
     services.Configure<AppSettings>(appSettingsConfig);
 
     services.AddScoped<IIdentityService, IdentityService>();
+    services.AddScoped<IEmailSender, CustomEmailSender>();
 
     var tokenValidationParameters = new TokenValidationParameters()
     {

@@ -85,8 +85,7 @@ public class AuthController : ControllerBase
 
     [HttpPost]
     [Route("refresh-token")]
-    // RefreshTokenRequest request
-    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
         try
         {
@@ -121,7 +120,6 @@ public class AuthController : ControllerBase
     {
         try
         {
-            //var refreshToken = GetRefreshTokenCookie();
             var authResponse = new AuthResponse();
 
             var refreshToken = GetRefreshTokenCookie();
@@ -138,6 +136,52 @@ public class AuthController : ControllerBase
             }
 
             return Ok(authResponse);
+        }
+        catch (Exception e)
+        {
+            return Problem(detail: e.Message, statusCode: (int)HttpStatusCode.InternalServerError);
+        }
+    }
+
+    [HttpPost]
+    [Route("send-password-reset-link")]
+    public async Task<IActionResult> SendPasswordResetLink([FromBody] SendPasswordResetLinkRequest request)
+    {
+        try
+        {
+            var resp = new ResetLinkResponse();
+
+            if (!ModelState.IsValid)
+            {
+                resp.Errors.AddRange(ModelState.GetErrors());
+                return BadRequest(resp);
+            }
+
+            resp = await _identityService.SendPasswordResetLink(request.Email);
+            return Ok(resp);
+        }
+        catch (Exception e)
+        {
+            return Problem(detail: e.Message, statusCode: (int)HttpStatusCode.InternalServerError);
+        }
+    }
+
+    [HttpPost]
+    [Route("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        try
+        {
+            var resp = new BaseResponse();
+
+            if (!ModelState.IsValid)
+            {
+                resp.Errors.AddRange(ModelState.GetErrors());
+                return BadRequest(resp);
+            }
+
+            resp = await _identityService.ResetPassword(request.Email, request.Password, request.Token);
+            return Ok(resp);
         }
         catch (Exception e)
         {
