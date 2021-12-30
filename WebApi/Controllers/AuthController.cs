@@ -129,7 +129,7 @@ public class AuthController : ControllerBase
                 return BadRequest(authResponse);
             }
 
-            authResponse = await _identityService.RevokeRefreshToken(refreshToken);
+            authResponse = await _identityService.RevokeRefreshTokenAsync(refreshToken);
             if (!authResponse.Success)
             {
                 return BadRequest(authResponse);
@@ -149,7 +149,7 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var resp = new ResetLinkResponse();
+            var resp = new SendLinkResetPasswordResponse();
 
             if (!ModelState.IsValid)
             {
@@ -157,8 +157,11 @@ public class AuthController : ControllerBase
                 return BadRequest(resp);
             }
 
-            resp = await _identityService.SendPasswordResetLink(request.Email);
-            return Ok();
+            resp = await _identityService.SendPasswordResetLinkAsync(request.Email);
+
+            resp.ResetLink = "";
+            resp.ResetPasswordToken = "";
+            return Ok(resp);
         }
         catch (Exception e)
         {
@@ -180,7 +183,30 @@ public class AuthController : ControllerBase
                 return BadRequest(resp);
             }
 
-            resp = await _identityService.ResetPassword(request.Email, request.Password, request.Token);
+            resp = await _identityService.ResetPasswordAsync(request.UserId, request.Password, request.Token);
+            return Ok(resp);
+        }
+        catch (Exception e)
+        {
+            return Problem(detail: e.Message, statusCode: (int)HttpStatusCode.InternalServerError);
+        }
+    }
+
+    [HttpPost]
+    [Route("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailRequest request)
+    {
+        try
+        {
+            var resp = new BaseResponse();
+
+            if (!ModelState.IsValid)
+            {
+                resp.Errors.AddRange(ModelState.GetErrors());
+                return BadRequest(resp);
+            }
+
+            resp = await _identityService.ConfirmEmailAsync(request.UserId, request.Token);
             return Ok(resp);
         }
         catch (Exception e)

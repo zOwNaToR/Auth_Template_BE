@@ -2,10 +2,6 @@
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Mail;
-//using MailKit.Net.Smtp;
-//using MailKit.Security;
-//using MimeKit;
-//using MimeKit.Text;
 
 namespace EmailSender;
 public class CustomEmailSender : IEmailSender
@@ -17,61 +13,41 @@ public class CustomEmailSender : IEmailSender
         _appSettings = appSettings.Value;
     }
 
-    //public void Send(string from, string to, string subject, string html)
-    //{
-    //    from = string.IsNullOrEmpty(from) ? _appSettings.SMTP.From : from;
-
-    //    // Create message
-    //    var email = new MimeMessage();
-    //    email.From.Add(MailboxAddress.Parse(from));
-    //    email.To.Add(MailboxAddress.Parse(to));
-    //    email.Subject = subject;
-    //    email.Body = new TextPart(TextFormat.Html)
-    //    {
-    //        Text = html
-    //    };
-
-    //    Send(email);
-    //}
-    //public void Send(string from, IEnumerable<string> to, string subject, string html)
-    //{
-    //    from = string.IsNullOrEmpty(from) ? _appSettings.SMTP.From : from;
-
-    //    // Create message
-    //    var email = new MimeMessage();
-    //    email.From.Add(MailboxAddress.Parse(from));
-
-    //    foreach (var singleTo in to)
-    //    {
-    //        email.To.Add(MailboxAddress.Parse(singleTo));
-    //    }
-
-    //    email.Subject = subject;
-    //    email.Body = new TextPart(TextFormat.Html)
-    //    {
-    //        Text = html
-    //    };
-
-    //    Send(email);
-    //}
-
-    public void Send(string from, string to, string subject, string html)
+    public async Task SendAsync(string from, string to, string subject, string html)
     {
-        from = string.IsNullOrEmpty(from) ? _appSettings.SMTP.From : from;
-
-        // Create message
-        var fromAddress = new MailAddress(from, ".NET Auth");
+        var fromAddress = new MailAddress(string.IsNullOrEmpty(from) ? _appSettings.SMTP.From : from, ".NET Auth");
         var toAddress = new MailAddress(to, to);
 
         using var email = new MailMessage(fromAddress, toAddress)
         {
             Subject = subject,
-            Body = html
+            Body = html,
+            IsBodyHtml = true,
         };
 
-        Send(email);
+        await SendAsync(email);
     }
-    public void Send(MailMessage email)
+    public async Task SendAsync(string from, IEnumerable<string> to, string subject, string html)
+    {
+        var fromAddress = new MailAddress(string.IsNullOrEmpty(from) ? _appSettings.SMTP.From : from, ".NET Auth");
+
+        using var email = new MailMessage()
+        {
+            From = fromAddress,
+            Subject = subject,
+            Body = html,
+            IsBodyHtml = true,
+        };
+
+        foreach (var recipient in to)
+        {
+            email.To.Add(recipient);
+        }
+
+        await SendAsync(email);
+    }
+
+    public async Task SendAsync(MailMessage email)
     {
         try
         {
@@ -84,28 +60,11 @@ public class CustomEmailSender : IEmailSender
                 Timeout = 20000,
             };
 
-            smtp.Send(email);
+            await smtp.SendMailAsync(email);
         }
         catch (Exception e)
         {
             throw;
         }
     }
-
-    //public void Send(MimeMessage email)
-    //{
-    //    try
-    //    {
-    //        // Send email
-    //        using var smtp = new SmtpClient();
-    //        smtp.Connect(_appSettings.SMTP.Host, _appSettings.SMTP.Port, SecureSocketOptions.StartTls);
-    //        smtp.Authenticate(_appSettings.SMTP.Username, _appSettings.SMTP.Password);
-    //        smtp.Send(email);
-    //        smtp.Disconnect(true);
-    //    }
-    //    catch (Exception e)
-    //    {
-    //        throw;
-    //    }
-    //}
 }

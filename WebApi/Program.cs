@@ -39,12 +39,10 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
         .AddEntityFrameworkStores<AppDbContext>()
         .AddDefaultTokenProviders();
 
-    // Dependency Injection
-    var appSettingsConfig = configuration.GetSection("AppSettings");
-    services.Configure<AppSettings>(appSettingsConfig);
-
-    services.AddScoped<IIdentityService, IdentityService>();
-    services.AddScoped<IEmailSender, CustomEmailSender>();
+    services.Configure<IdentityOptions>(options =>
+    {
+        options.SignIn.RequireConfirmedEmail = true;
+    });
 
     var tokenValidationParameters = new TokenValidationParameters()
     {
@@ -59,7 +57,13 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
         ClockSkew = TimeSpan.Zero
     };
 
+    // Dependency Injection
+    var appSettingsConfig = configuration.GetSection("AppSettings");
+    services.Configure<AppSettings>(appSettingsConfig);
+
     services.AddSingleton(tokenValidationParameters);
+    services.AddScoped<IIdentityService, IdentityService>();
+    services.AddScoped<IEmailSender, CustomEmailSender>();
 
     // Adding Authentication  
     services.AddAuthentication(options =>

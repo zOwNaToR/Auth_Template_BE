@@ -1,10 +1,11 @@
 ﻿using Common;
 using EmailSender;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
 
 namespace WebApi.Services;
@@ -15,7 +16,7 @@ public class IdentityService : IIdentityService
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly RoleManager<IdentityRole<Guid>> _roleManager;
     private readonly IEmailSender _emailSender;
-    private readonly LinkGenerator _generator;
+    private readonly IDataProtector _dataProtector;
     private readonly HttpContext _httpContext;
     private readonly TokenValidationParameters _tokenValidationParameters;
     private readonly AppDbContext _context;
@@ -26,7 +27,7 @@ public class IdentityService : IIdentityService
         TokenValidationParameters tokenValidationParameters,
         RoleManager<IdentityRole<Guid>> roleManager,
         IEmailSender emailSender,
-        LinkGenerator generator,
+        IDataProtectionProvider dataProtectionProvider,
         IHttpContextAccessor httpContextAccessor,
         IOptions<AppSettings> appSettings,
         AppDbContext context)
@@ -36,7 +37,7 @@ public class IdentityService : IIdentityService
         _tokenValidationParameters = tokenValidationParameters;
         _roleManager = roleManager;
         _emailSender = emailSender;
-        _generator = generator;
+        _dataProtector = dataProtectionProvider.CreateProtector("DataProtectorTokenProvider");
         _httpContext = httpContextAccessor.HttpContext;
         _appSettings = appSettings.Value;
         _context = context;
@@ -46,7 +47,7 @@ public class IdentityService : IIdentityService
     #region Public interface methods
     public async Task<BaseResponse> RegisterAsync(string username, string email, string password)
     {
-        var response = new BaseResponse(false);
+        var response = new BaseResponse();
         var existingUser = await _userManager.FindByEmailAsync(email);
 
         if (existingUser != null)
@@ -69,32 +70,37 @@ public class IdentityService : IIdentityService
             return response;
         }
 
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(newUser);
+        var confirmEmailLink = $"{_httpContext.Request.GetClientBaseUrl()}/confirm-email?token={WebUtility.UrlEncode(token)}&userId={newUser.Id}";
+
+        await _emailSender.SendAsync(null, newUser.Email, "Confirm Email .NET Auth", $"<a href=\"{confirmEmailLink}\">Click here to confirm your email</a>");
+
         response.Success = true;
         return response;
         //return await GenerateAuthenticationResultForUserAsync(newUser);
     }
     public async Task<AuthResponse> LoginAsync(string email, string password)
     {
-        var errorResponse = new AuthResponse(false);
+        var errorResponse = new AuthResponse();
         var user = await _userManager.FindByEmailAsync(email);
 
         if (user == null)
         {
-            errorResponse.Errors.Add("Wrong credentials");
+            errorResponse.Errors.Add("Wrong email and password");
             return errorResponse;
         }
 
         var userHasValidPassword = await _userManager.CheckPasswordAsync(user, password);
         if (!userHasValidPassword)
         {
-            errorResponse.Errors.Add("credentials");
+            errorResponse.Errors.Add("Wrong email and password");
             return errorResponse;
         }
 
         var result = await _signInManager.PasswordSignInAsync(user, password, true, false);
         if (!result.Succeeded)
         {
-            errorResponse.Errors.Add("credentials");
+            errorResponse.Errors.Add("Wrong email and password");
             return errorResponse;
         }
 
@@ -102,7 +108,7 @@ public class IdentityService : IIdentityService
     }
     public async Task<AuthResponse> RefreshTokenAsync(string token, string refreshToken)
     {
-        var errorResponse = new AuthResponse(false);
+        var errorResponse = new AuthResponse();
 
         // Validate old token expiry date if present
         if (!string.IsNullOrEmpty(token))
@@ -141,7 +147,7 @@ public class IdentityService : IIdentityService
         }
         if (dbRefreshToken.Invalidated)
         {
-            await InvalidateAllUserRefreshTokens(dbRefreshToken.UserId);
+            await InvalidateAllUserRefreshTokensAsync(dbRefreshToken.UserId);
             errorResponse.Errors.Add("This refresh token has been invalidated");
             return errorResponse;
         }
@@ -163,9 +169,9 @@ public class IdentityService : IIdentityService
         var user = await _userManager.FindByIdAsync(dbRefreshToken.UserId.ToString());
         return await GenerateAuthenticationResultForUserAsync(user);
     }
-    public async Task<AuthResponse> RevokeRefreshToken(string refreshToken)
+    public async Task<AuthResponse> RevokeRefreshTokenAsync(string refreshToken)
     {
-        var errorResponse = new AuthResponse(false);
+        var errorResponse = new AuthResponse();
 
         var dbRefreshToken = await _context.RefreshTokens.SingleOrDefaultAsync(x => x.Token == refreshToken);
         if (dbRefreshToken == null)
@@ -187,9 +193,9 @@ public class IdentityService : IIdentityService
             Success = true
         };
     }
-    public async Task<ResetLinkResponse> SendPasswordResetLink(string email)
+    public async Task<SendLinkResetPasswordResponse> SendPasswordResetLinkAsync(string email)
     {
-        var response = new ResetLinkResponse(false);
+        var response = new SendLinkResetPasswordResponse();
 
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null)
@@ -204,28 +210,71 @@ public class IdentityService : IIdentityService
         }
 
         response.ResetPasswordToken = await _userManager.GeneratePasswordResetTokenAsync(user);
-        response.ResetLink = _generator.GetUriByAction(_httpContext,
-            "ResetPassword",
-            "Auth",
-            new { token = response.ResetPasswordToken });
+        response.ResetLink = $"{_httpContext.Request.GetClientBaseUrl()}/reset-password" +
+            $"?token={WebUtility.UrlEncode(response.ResetPasswordToken)}&userId={user.Id}";
 
-        _emailSender.Send(null, user.Email, "Reset Email .NET Auth", $"<a href=\"{response.ResetLink}\">Click here</a>");
+        await _emailSender.SendAsync(null, user.Email, "Reset Email .NET Auth", $"<a href=\"{response.ResetLink}\">Click here to reset your password</a>");
 
         response.Success = true;
         return response;
     }
-    public async Task<BaseResponse> ResetPassword(string email, string password, string resetPasswordToken)
+    public async Task<BaseResponse> ResetPasswordAsync(Guid userId, string password, string resetPasswordToken)
     {
-        var response = new BaseResponse(false);
+        var response = new BaseResponse();
 
-        var user = await _userManager.FindByEmailAsync(email);
-        IdentityResult result = await _userManager.ResetPasswordAsync(user, resetPasswordToken, password);
-
-        if (!result.Succeeded)
+        try
         {
-            response.Errors.Add("Error while resetting password");
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+            {
+                response.Errors.Add("Invalid token");
+                return response;
+            }
+
+            var result = await _userManager.ResetPasswordAsync(user, resetPasswordToken, password);
+            if (!result.Succeeded)
+            {
+                response.Errors.AddRange(result.Errors.Select(x => x.Description));
+                return response;
+            }
+
+            _ = Utility.IgnoreErrors(async () =>
+            {
+                await _emailSender.SendAsync(null, user.Email, "Reset Email .NET Auth", $"Your password has been resetted.");
+            });
+
+            response.Success = true;
+        }
+        catch (Exception e)
+        {
+            response.Errors.Add(e.Message);
+        }
+
+
+        return response;
+    }
+    public async Task<BaseResponse> ConfirmEmailAsync(Guid userId, string confirmEmailToken)
+    {
+        var response = new BaseResponse();
+        
+        var user = await _userManager.FindByIdAsync(userId.ToString());
+        if (user == null)
+        {
+            response.Errors.Add("Invalid token");
             return response;
         }
+
+        var result = await _userManager.ConfirmEmailAsync(user, confirmEmailToken);
+        if (!result.Succeeded)
+        {
+            response.Errors.AddRange(result.Errors.Select(x => x.Description));
+            return response;
+        }
+
+        _ = Utility.IgnoreErrors(async () =>
+        {
+            await _emailSender.SendAsync(null, user.Email, "Email confirmed .NET Auth", $"Your email has been confirmed.");
+        });
 
         response.Success = true;
         return response;
@@ -269,7 +318,7 @@ public class IdentityService : IIdentityService
     #endregion
 
     #region Get Principal/Claims
-    private async Task<IEnumerable<Claim>> GetTokenClaims(ApplicationUser user)
+    private async Task<IEnumerable<Claim>> GetTokenClaimsAsync(ApplicationUser user)
     {
         var claims = new List<Claim>
         {
@@ -327,7 +376,7 @@ public class IdentityService : IIdentityService
     }
     #endregion
 
-    private async Task InvalidateAllUserRefreshTokens(Guid userId)
+    private async Task InvalidateAllUserRefreshTokensAsync(Guid userId)
     {
         var dbRefreshTokens = await _context.RefreshTokens.Where(x => x.UserId == userId).ToListAsync();
         dbRefreshTokens.ForEach(x => x.Invalidated = true);
@@ -337,7 +386,7 @@ public class IdentityService : IIdentityService
     {
         var tokenHandler = new JwtSecurityTokenHandler();
 
-        var claims = await GetTokenClaims(user);
+        var claims = await GetTokenClaimsAsync(user);
         var token = GenerateJwtToken(tokenHandler, claims);
         var refreshToken = await GenerateJwtRefreshTokenAsync(user.Id, token.Id);
 
@@ -356,4 +405,5 @@ public class IdentityService : IIdentityService
         return (token is JwtSecurityToken jwtToken) &&
             jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase);
     }
+
 }
