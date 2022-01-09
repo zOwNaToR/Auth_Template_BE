@@ -1,4 +1,4 @@
-﻿namespace Common;
+﻿namespace Common.Dto;
 
 public class AppSettings
 {

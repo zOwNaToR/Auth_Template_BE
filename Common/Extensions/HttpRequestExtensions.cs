@@ -1,4 +1,6 @@
-﻿namespace WebApi.Extensions;
+﻿using Microsoft.AspNetCore.Http;
+
+namespace Common.Extensions;
 
 public static class HttpRequestExtensions
 {

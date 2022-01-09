@@ -1,8 +1,7 @@
-using Common;
+using Common.Dto;
 using EmailSender;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
@@ -64,6 +63,7 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
     services.AddSingleton(tokenValidationParameters);
     services.AddScoped<IIdentityService, IdentityService>();
     services.AddScoped<IEmailSender, CustomEmailSender>();
+    services.AddScoped<IUserService, UserService>();
 
     // Adding Authentication  
     services.AddAuthentication(options =>
