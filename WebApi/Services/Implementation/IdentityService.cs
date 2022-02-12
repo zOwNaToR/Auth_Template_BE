@@ -47,9 +47,9 @@ public class IdentityService : IIdentityService
 	#region Public interface methods
 	public async Task<BaseResponse> RegisterAsync(RegisterRequest request)
 	{
-		return await RegisterAsync(request.Username, request.Email, request.Password);
+		return await RegisterAsync(request.Email, request.Password, request.FirstName, request.LastName, request.BirthDate, request.Sex);
 	}
-	public async Task<BaseResponse> RegisterAsync(string username, string email, string password)
+	public async Task<BaseResponse> RegisterAsync(string email, string password, string firstName, string lastName, DateTime birthDate, string sex)
 	{
 		var response = new BaseResponse();
 		var existingUser = await _userManager.FindByEmailAsync(email);
@@ -64,7 +64,11 @@ public class IdentityService : IIdentityService
 		{
 			Id = Guid.NewGuid(),
 			Email = email,
-			UserName = username
+			UserName = email,
+			FirstName = firstName,
+			LastName = lastName,
+			BirthDate = birthDate,
+			Sex = sex,
 		};
 
 		var createdUser = await _userManager.CreateAsync(newUser, password);

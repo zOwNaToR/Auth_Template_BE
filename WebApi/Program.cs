@@ -31,7 +31,7 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
     //    options.MinimumSameSitePolicy = SameSiteMode.None;
     //});
 
-    services.AddDbContext<AppDbContext>(options => options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"),
+    services.AddDbContext<AppDbContext>(options => options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"),
         b => b.MigrationsAssembly("DAL")));
 
     services.AddIdentity<ApplicationUser, IdentityRole<Guid>>()
@@ -52,7 +52,7 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
         ValidAudience = configuration["AppSettings:JWT:ValidAudience"],
         ValidIssuer = configuration["AppSettings:JWT:ValidIssuer"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["AppSettings:JWT:SecretKey"])),
-        // set clockskew to zero so tokens expire exactly at token expiration time (instead of 5 minutes later)
+        // set ClockSkew to zero so tokens expire exactly at token expiration time (instead of 5 minutes later)
         ClockSkew = TimeSpan.Zero
     };
 
@@ -116,6 +116,7 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
 }
 
 var builder = WebApplication.CreateBuilder(args);
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 ConfigureServices(builder.Services, builder.Configuration);
 
 // Middleware

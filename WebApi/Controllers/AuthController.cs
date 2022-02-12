@@ -37,7 +37,7 @@ public class AuthController : ControllerBase
                 return BadRequest(response);
             }
 
-            response = await _identityService.RegisterAsync(request.Username, request.Email, request.Password);
+            response = await _identityService.RegisterAsync(request);
             if (!response.Success)
             {
                 return BadRequest(response);

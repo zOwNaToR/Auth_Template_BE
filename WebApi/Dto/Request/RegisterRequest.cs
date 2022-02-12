@@ -2,8 +2,17 @@
 
 public class RegisterRequest
 {
+    [Required(ErrorMessage = "First name required")]
+    public string? FirstName { get; set; }
+    
+    [Required(ErrorMessage = "Last aname required")]
+    public string? LastName { get; set; }
+    
     [Required(ErrorMessage = "Username required")]
-    public string? Username { get; set; }
+    public DateTime BirthDate { get; set; }
+    
+    [Required(ErrorMessage = "Username required")]
+    public string Sex { get; set; }
 
     [EmailAddress]
     [Required(ErrorMessage = "Email required")]

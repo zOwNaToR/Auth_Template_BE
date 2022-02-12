@@ -2,7 +2,7 @@
 public interface IIdentityService
 {
 	Task<BaseResponse> RegisterAsync(RegisterRequest request);
-	Task<BaseResponse> RegisterAsync(string username, string email, string password);
+	Task<BaseResponse> RegisterAsync(string email, string password, string firstName, string lastName, DateTime birthDate, string sex);
 	Task<AuthResponse> LoginAsync(string email, string password);
 	Task<AuthResponse> RefreshTokenAsync(string token, string refreshToken);
 	Task<AuthResponse> RevokeRefreshTokenAsync(string token);
