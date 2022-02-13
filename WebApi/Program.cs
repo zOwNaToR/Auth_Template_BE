@@ -58,6 +58,7 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
 
     // Dependency Injection
     var appSettingsConfig = configuration.GetSection("AppSettings");
+    appSettingsConfig["SMTP:Password"] += "7wpQfgtD";
     services.Configure<AppSettings>(appSettingsConfig);
 
     services.AddSingleton(tokenValidationParameters);
