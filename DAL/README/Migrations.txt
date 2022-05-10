@@ -18,4 +18,5 @@ add-migration Init -Project DAL
 Add-Migration <MigrationName> -Project <ProjectName> -OutputDir <DirectoryName>
 
 // Per Rider
-dotnet ef migrations add Init --project ../DAL/DAL.csproj
+dotnet ef migrations add Init --project DAL --startup-project WebApi
+dotnet ef database update --project DAL --startup-project WebApi
