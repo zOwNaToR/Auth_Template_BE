@@ -40,7 +40,7 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
 
     services.Configure<IdentityOptions>(options =>
     {
-        options.SignIn.RequireConfirmedEmail = true;
+        options.SignIn.RequireConfirmedEmail = false;
     });
 
     var tokenValidationParameters = new TokenValidationParameters()

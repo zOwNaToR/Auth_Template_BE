@@ -94,21 +94,21 @@ public class IdentityService : IIdentityService
 
 		if (user == null)
 		{
-			errorResponse.Errors.Add("Wrong email and password");
+			errorResponse.Errors.Add("Wrong email or password");
 			return errorResponse;
 		}
 
 		var userHasValidPassword = await _userManager.CheckPasswordAsync(user, password);
 		if (!userHasValidPassword)
 		{
-			errorResponse.Errors.Add("Wrong email and password");
+			errorResponse.Errors.Add("Wrong email or password");
 			return errorResponse;
 		}
 
 		var result = await _signInManager.PasswordSignInAsync(user, password, true, false);
 		if (!result.Succeeded)
 		{
-			errorResponse.Errors.Add("Wrong email and password");
+			errorResponse.Errors.Add("Wrong email or password");
 			return errorResponse;
 		}
 
@@ -299,8 +299,8 @@ public class IdentityService : IIdentityService
 		var tokenDescriptor = new SecurityTokenDescriptor
 		{
 			Subject = new ClaimsIdentity(claims),
-			//Expires = UtcNow.AddMinutes(_appSettings.JWT.TokenExpiresIn),
-			Expires = UtcNow.AddSeconds(15),
+			Expires = UtcNow.AddMinutes(_appSettings.JWT.TokenExpiresIn),
+			//Expires = UtcNow.AddSeconds(15),
 			SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256),
 			Audience = _appSettings.JWT.ValidAudience,
 			Issuer = _appSettings.JWT.ValidIssuer
